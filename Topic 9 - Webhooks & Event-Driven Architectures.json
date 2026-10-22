@@ -1,0 +1,459 @@
+{
+  "name": "Topic 9 - Webhooks & Event-Driven Architectures",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "v1/events/inbound",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -448,
+        0
+      ],
+      "id": "1a409654-b540-4cfe-a8fb-5152fe25fa7b",
+      "name": "Webhook_InboundEvents",
+      "webhookId": "ef0ea6f9-934c-4410-88a7-d80f988312af"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n\n\n\nconst item = $input.item;\n\nconst headers = item.json.headers || {};\nconst payload = item.json.body || {};\n\nconst calculated = String(\n  item.json.data || ''\n).trim().toLowerCase();\n\nconst received = String(\n  headers['x-signature-sha256'] || ''\n).trim().toLowerCase().replace(/^sha256=/, '');\n\nconst validHex = /^[0-9a-f]{64}$/;\n\nconst isValidSignature =\n  validHex.test(calculated) &&\n  validHex.test(received) &&\n  calculated === received;\n\nreturn {\n  json: {\n    isValidSignature,\n    event: payload.event || 'unknown.event',\n    payload,\n    calculatedSignaturePresent: validHex.test(calculated),\n    receivedSignaturePresent: validHex.test(received),\n    verifiedAt: new Date().toISOString()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        0
+      ],
+      "id": "716652a6-fff1-4ac9-8dc3-f44bddd3035e",
+      "name": "Code_VerifyHMACSignature"
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "binaryData": true
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        0
+      ],
+      "id": "071f2f81-b2f4-4d67-b240-2fb1ffcffad4",
+      "name": "Crypto_GenerateHMAC",
+      "credentials": {
+        "crypto": {
+          "id": "HelwRRpW5ukYYOKF",
+          "name": "Crypto account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "28fcaec4-6c4f-4a34-81b5-94e27861ac9a",
+              "leftValue": "={{ $json.isValidSignature }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        256,
+        0
+      ],
+      "id": "c3db4738-a06f-4b76-80b3-4ae1d12cdb08",
+      "name": "IF_IsSignatureValid"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "\n{\n  \"status\": \"ACCEPTED\",\n  \"message\": \"Webhook signature verified successfully\"\n}\n",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        464,
+        -96
+      ],
+      "id": "d6cd82ea-ff75-4375-81ef-9f42e635268e",
+      "name": "Resp_202Accepted"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"error\": \"Unauthorized\",\n  \"message\": \"Invalid or missing HMAC-SHA256 signature\"\n}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        512,
+        80
+      ],
+      "id": "43ecb39f-eb8b-4ecc-94db-8c4aa44f05e0",
+      "name": "Resp_401Unauthorized"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.event }}",
+                    "rightValue": "user.created",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a248e5f6-0676-499d-8a9d-2722f047a8e6"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "a3116f1a-45c4-4b4c-a1ba-6bde2826038e",
+                    "leftValue": "={{ $json.event }}",
+                    "rightValue": "invoice.paid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "365ce366-cb69-4444-9bb7-6f5aecba6d82",
+                    "leftValue": "={{ $json.event }}",
+                    "rightValue": "order.cancelled",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        -112
+      ],
+      "id": "487df300-f0c3-41be-9917-564c75295059",
+      "name": "Switch_RouteEventType"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst event = $input.item.json;\nconst payload = event.payload || {};\n\nreturn {\n  json: {\n    event: event.event,\n    userId: payload.userId || null,\n    status: \"PROVISIONED_USER\",\n    message: \"User creation event processed successfully\",\n    processedAt: new Date().toISOString()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -368
+      ],
+      "id": "99bbedee-334c-4ae4-9b1a-7a0b527d29d9",
+      "name": "Code_HandleUserCreated"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst event = $input.item.json;\nconst payload = event.payload || {};\n\nreturn {\n  json: {\n    event: event.event,\n    invoiceId: payload.invoiceId || null,\n    status: \"LEDGER_UPDATED\",\n    message: \"Invoice payment event processed successfully\",\n    processedAt: new Date().toISOString()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -192
+      ],
+      "id": "8d2c4a28-283c-43ce-9f05-fa34ca0f3ff6",
+      "name": "Code_HandleInvoicePaid"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst event = $input.item.json;\nconst payload = event.payload || {};\n\nreturn {\n  json: {\n    event: event.event,\n    orderId: payload.orderId || null,\n    status: \"INVENTORY_RESTOCKED\",\n    message: \"Order cancellation event processed successfully\",\n    processedAt: new Date().toISOString()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        -32
+      ],
+      "id": "ba0b7b29-0441-46e0-9a7b-d44baac74df3",
+      "name": "Code_HandleOrderCancelled"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst event = $input.item.json;\nconst payload = event.payload || {};\n\nreturn {\n  json: {\n    event: event.event || \"unknown.event\",\n    payload: payload,\n    status: \"LOGGED_UNKNOWN_EVENT\",\n    message: \"Unknown event type received and handled safely\",\n    processedAt: new Date().toISOString()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        144
+      ],
+      "id": "bf7337fe-dc30-4980-b981-fb6dfbf5f204",
+      "name": "Code_HandleUnknownEvent"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst data = $input.item.json;\n\nreturn {\n  json: {\n    auditLogId: \"AUD-\" + Date.now(),\n    eventHandled: data.event || \"unknown.event\",\n    executionOutcome: data.status || \"UNKNOWN\",\n    referenceId:\n      data.userId ||\n      data.invoiceId ||\n      data.orderId ||\n      null,\n    message: data.message || \"\",\n    recordedAt: new Date().toISOString()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        -192
+      ],
+      "id": "4d006eb1-a12d-4e65-a031-8f639982654b",
+      "name": "Code_AuditTrail"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst verification = $('Code_VerifyHMACSignature').item.json;\n\nreturn {\n  json: {\n    incidentId: \"SEC-\" + Date.now(),\n    incidentType: \"INVALID_WEBHOOK_SIGNATURE\",\n    event: verification.event || \"unknown.event\",\n    severity: \"HIGH\",\n    signatureValid: false,\n    httpStatus: 401,\n    message: \"Webhook rejected due to invalid or missing HMAC signature\",\n    recordedAt: new Date().toISOString()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        192
+      ],
+      "id": "7161a9fd-6810-4a26-8938-bb08de33efc7",
+      "name": "Log_SecurityIncident"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook_InboundEvents": {
+      "main": [
+        [
+          {
+            "node": "Crypto_GenerateHMAC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code_VerifyHMACSignature": {
+      "main": [
+        [
+          {
+            "node": "IF_IsSignatureValid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crypto_GenerateHMAC": {
+      "main": [
+        [
+          {
+            "node": "Code_VerifyHMACSignature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF_IsSignatureValid": {
+      "main": [
+        [
+          {
+            "node": "Resp_202Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resp_401Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp_202Accepted": {
+      "main": [
+        [
+          {
+            "node": "Switch_RouteEventType",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch_RouteEventType": {
+      "main": [
+        [
+          {
+            "node": "Code_HandleUserCreated",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code_HandleInvoicePaid",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code_HandleOrderCancelled",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code_HandleUnknownEvent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code_HandleUserCreated": {
+      "main": [
+        [
+          {
+            "node": "Code_AuditTrail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code_HandleInvoicePaid": {
+      "main": [
+        [
+          {
+            "node": "Code_AuditTrail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code_HandleOrderCancelled": {
+      "main": [
+        [
+          {
+            "node": "Code_AuditTrail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code_HandleUnknownEvent": {
+      "main": [
+        [
+          {
+            "node": "Code_AuditTrail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp_401Unauthorized": {
+      "main": [
+        [
+          {
+            "node": "Log_SecurityIncident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "3b518fc3-ef64-4f3f-93b2-e3af29196e60",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a03c7678428ef19ededbf912f16f7d5798ec7b9ab4c17f2a2def6a9e791e7215"
+  },
+  "nodeGroups": [],
+  "id": "Uvv4jXsorMZLiygm",
+  "tags": []
+}
